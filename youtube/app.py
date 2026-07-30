@@ -3,12 +3,12 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 from wordcloud import WordCloud
+import plotly.graph_objects as go
 import plotly.express as px
 from googleapiclient.discovery import build
 from datetime import datetime
 import re
 from collections import Counter
-from konlpy.tag import Okt
 import warnings
 
 warnings.filterwarnings('ignore')
@@ -20,16 +20,6 @@ st.set_page_config(
     layout="wide"
 )
 
-# CSS 스타일
-st.markdown("""
-<style>
-    .main { padding: 2rem; }
-    .stTitle { color: #FF0000; }
-    h1, h2, h3 { color: #1f77b4; }
-    .metric-card { background-color: #f0f2f6; padding: 1rem; border-radius: 0.5rem; }
-</style>
-""", unsafe_allow_html=True)
-
 st.title("🎬 유튜브 댓글 분석기")
 
 # ===================== 사이드바 설정 =====================
@@ -37,8 +27,7 @@ st.sidebar.header("⚙️ 설정")
 
 api_key = st.sidebar.text_input(
     "YouTube API Key 입력",
-    type="password",
-    help="https://console.cloud.google.com 에서 API 키 발급"
+    type="password"
 )
 
 youtube_url = st.sidebar.text_input(
@@ -49,7 +38,7 @@ youtube_url = st.sidebar.text_input(
 num_comments = st.sidebar.slider(
     "분석할 댓글 개수",
     min_value=10,
-    max_value=1000,
+    max_value=500,
     value=100,
     step=10
 )
@@ -75,7 +64,7 @@ def get_youtube_comments(api_key, video_id, max_comments):
         
         comments_data = []
         request = youtube.commentThreads().list(
-            part='snippet,replies',
+            part='snippet',
             videoId=video_id,
             textFormat='plainText',
             maxResults=100,
@@ -83,6 +72,7 @@ def get_youtube_comments(api_key, video_id, max_comments):
         )
         
         progress_bar = st.progress(0)
+        status_text = st.empty()
         
         while request and len(comments_data) < max_comments:
             response = request.execute()
@@ -102,10 +92,11 @@ def get_youtube_comments(api_key, video_id, max_comments):
             
             progress = min(len(comments_data) / max_comments, 1.0)
             progress_bar.progress(progress)
+            status_text.text(f"수집된 댓글: {len(comments_data)}/{max_comments}")
             
-            if 'nextPageToken' in response:
+            if 'nextPageToken' in response and len(comments_data) < max_comments:
                 request = youtube.commentThreads().list(
-                    part='snippet,replies',
+                    part='snippet',
                     videoId=video_id,
                     pageToken=response['nextPageToken'],
                     textFormat='plainText',
@@ -116,26 +107,12 @@ def get_youtube_comments(api_key, video_id, max_comments):
                 break
         
         progress_bar.empty()
+        status_text.empty()
         return pd.DataFrame(comments_data)
     
     except Exception as e:
         st.error(f"오류 발생: {str(e)}")
         return None
-
-def clean_text(text):
-    """텍스트 전처리"""
-    text = re.sub(r'[^\w\s가-힣]', '', text)
-    text = re.sub(r'\s+', ' ', text)
-    return text.strip()
-
-def extract_korean_nouns(text):
-    """한글 명사 추출"""
-    okt = Okt()
-    try:
-        nouns = okt.nouns(text)
-        return [noun for noun in nouns if len(noun) > 1]
-    except:
-        return []
 
 def get_video_info(api_key, video_id):
     """유튜브 영상 정보 조회"""
@@ -152,7 +129,7 @@ def get_video_info(api_key, video_id):
             return {
                 'title': video['snippet']['title'],
                 'channel': video['snippet']['channelTitle'],
-                'thumbnail': video['snippet']['thumbnails']['maxres']['url'],
+                'thumbnail': video['snippet']['thumbnails']['maxres']['url'] if 'maxres' in video['snippet']['thumbnails'] else video['snippet']['thumbnails']['high']['url'],
                 'views': int(video['statistics']['viewCount']),
                 'likes': int(video['statistics'].get('likeCount', 0)),
                 'comment_count': int(video['statistics'].get('commentCount', 0))
@@ -163,10 +140,11 @@ def get_video_info(api_key, video_id):
 
 def plot_comments_timeline(df):
     """시간대별 댓글 추이"""
-    df['published_at'] = pd.to_datetime(df['published_at'])
-    df['date'] = df['published_at'].dt.date
+    df_copy = df.copy()
+    df_copy['published_at'] = pd.to_datetime(df_copy['published_at'])
+    df_copy['date'] = df_copy['published_at'].dt.date
     
-    timeline = df.groupby('date').size().reset_index(name='count')
+    timeline = df_copy.groupby('date').size().reset_index(name='count')
     
     fig = px.line(
         timeline,
@@ -191,42 +169,54 @@ def plot_likes_distribution(df):
     )
     return fig
 
+def extract_nouns(text):
+    """간단한 한글 명사 추출 (정규표현식 기반)"""
+    # 한글 단어 추출
+    korean_words = re.findall(r'[가-힣]+', text)
+    # 2글자 이상만 필터링
+    return [word for word in korean_words if len(word) >= 2]
+
 def create_wordcloud(df):
     """한글 워드클라우드 생성"""
-    # 텍스트 전처리
-    texts = df['text'].apply(lambda x: clean_text(x)).tolist()
-    
-    # 명사 추출
-    all_nouns = []
-    for text in texts:
-        nouns = extract_korean_nouns(text)
-        all_nouns.extend(nouns)
-    
-    if not all_nouns:
+    try:
+        # 텍스트에서 한글 명사 추출
+        all_nouns = []
+        for text in df['text']:
+            nouns = extract_nouns(text)
+            all_nouns.extend(nouns)
+        
+        if not all_nouns:
+            return None
+        
+        # 단어 빈도 계산
+        noun_freq = Counter(all_nouns)
+        
+        # 가장 많은 단어들만 사용
+        noun_freq = dict(noun_freq.most_common(100))
+        
+        # 워드클라우드 생성
+        wc = WordCloud(
+            font_path='/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc',
+            background_color='white',
+            width=1000,
+            height=500,
+            relative_scaling=0.5,
+            min_font_size=10
+        ).generate_from_frequencies(noun_freq)
+        
+        fig, ax = plt.subplots(figsize=(14, 7))
+        ax.imshow(wc, interpolation='bilinear')
+        ax.axis('off')
+        plt.tight_layout(pad=0)
+        return fig
+    except Exception as e:
+        st.warning(f"워드클라우드 생성 실패: {str(e)}")
         return None
-    
-    # 단어 빈도 계산
-    noun_freq = Counter(all_nouns)
-    
-    # 워드클라우드 생성
-    wc = WordCloud(
-        font_path='/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc',
-        background_color='white',
-        width=800,
-        height=400,
-        relative_scaling=0.5,
-        min_font_size=10,
-        collocations=False
-    ).generate_from_frequencies(noun_freq)
-    
-    fig, ax = plt.subplots(figsize=(12, 6))
-    ax.imshow(wc, interpolation='bilinear')
-    ax.axis('off')
-    return fig
 
 def plot_reply_count(df):
     """댓글 답글 수 분포"""
-    df_top = df.nlargest(15, 'reply_count')
+    df_copy = df.copy()
+    df_top = df_copy.nlargest(15, 'reply_count')
     
     fig = px.bar(
         df_top,
@@ -238,6 +228,7 @@ def plot_reply_count(df):
         color='reply_count',
         color_continuous_scale='Reds'
     )
+    fig.update_layout(height=500)
     return fig
 
 # ===================== 메인 로직 =====================
@@ -245,12 +236,12 @@ def plot_reply_count(df):
 if not api_key:
     st.warning("⚠️ 사이드바에서 API 키를 입력하세요.")
     st.markdown("""
-    ### API 키 발급 방법
+    ### 📌 API 키 발급 방법
     1. [Google Cloud Console](https://console.cloud.google.com) 접속
     2. 새 프로젝트 생성
     3. YouTube Data API v3 활성화
     4. 사용자 인증정보 > API 키 생성
-    5. 키를 위 입력란에 붙여넣기
+    5. 발급받은 키를 위 입력란에 붙여넣기
     """)
 
 elif not youtube_url:
@@ -288,7 +279,7 @@ else:
         st.divider()
         
         # 댓글 수집
-        if st.button("🔍 댓글 분석 시작", use_container_width=True):
+        if st.button("🔍 댓글 분석 시작", use_container_width=True, key="analyze_btn"):
             with st.spinner(f"댓글 {num_comments}개 수집 중..."):
                 df = get_youtube_comments(api_key, video_id, num_comments)
             
@@ -305,7 +296,7 @@ else:
                 ])
                 
                 with tab1:
-                    st.subheader("댓글 데이터 개요")
+                    st.subheader("📊 댓글 데이터 개요")
                     col1, col2, col3, col4 = st.columns(4)
                     
                     with col1:
@@ -318,10 +309,10 @@ else:
                         st.metric("평균 답글 수", f"{df['reply_count'].mean():.1f}")
                     
                     st.divider()
-                    st.subheader("최근 댓글")
+                    st.subheader("최근 댓글 (상위 20개)")
                     df_display = df[['author', 'text', 'likes', 'reply_count']].head(20).copy()
-                    df_display['text'] = df_display['text'].apply(lambda x: x[:50] + '...' if len(x) > 50 else x)
-                    st.dataframe(df_display, use_container_width=True)
+                    df_display['text'] = df_display['text'].apply(lambda x: x[:60] + '...' if len(x) > 60 else x)
+                    st.dataframe(df_display, use_container_width=True, hide_index=True)
                 
                 with tab2:
                     st.plotly_chart(plot_comments_timeline(df), use_container_width=True)
@@ -332,25 +323,23 @@ else:
                     st.plotly_chart(plot_reply_count(df), use_container_width=True)
                 
                 with tab4:
-                    st.subheader("댓글 워드클라우드")
+                    st.subheader("☁️ 댓글 워드클라우드")
                     wc_fig = create_wordcloud(df)
                     if wc_fig:
                         st.pyplot(wc_fig, use_container_width=True)
                     else:
-                        st.warning("워드클라우드를 생성할 수 없습니다.")
+                        st.info("워드클라우드를 생성할 수 없습니다.")
                 
                 with tab5:
-                    st.subheader("인기 있는 댓글 (좋아요 상위 20개)")
+                    st.subheader("💬 인기 있는 댓글 (좋아요 상위 20개)")
                     df_top = df.nlargest(20, 'likes')[['author', 'text', 'likes', 'reply_count']]
                     
                     for idx, row in df_top.iterrows():
                         with st.container():
-                            col1, col2 = st.columns([1, 20])
-                            with col2:
-                                st.markdown(f"**{row['author']}**")
-                                st.write(row['text'])
-                                st.caption(f"👍 {row['likes']} | 💬 {row['reply_count']}")
+                            st.markdown(f"**{row['author']}**")
+                            st.write(row['text'])
+                            st.caption(f"👍 {row['likes']} | 💬 {row['reply_count']}")
                             st.divider()
             
             else:
-                st.error("댓글을 수집할 수 없습니다. API 키와 영상 ID를 확인하세요.")
+                st.error("❌ 댓글을 수집할 수 없습니다. API 키와 영상 ID를 확인하세요.")
