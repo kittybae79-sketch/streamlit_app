@@ -1,315 +1,260 @@
 import streamlit as st
 from streamlit_option_menu import option_menu
-import pandas as pd
 from datetime import datetime
 
 # 페이지 설정
 st.set_page_config(
-    page_title="🌸 일본여행 MBTI 추천",
+    page_title="MBTI 일본 여행지 추천",
     page_icon="🌸",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# CSS 스타일 (핑크톤)
+# CSS 스타일
 st.markdown("""
     <style>
-    :root {
-        --primary-color: #FFB6D9;
-        --secondary-color: #FFC0CB;
-        --tertiary-color: #FFE4F0;
-    }
-    
-    * {
-        color: #333333;
-    }
-    
-    [data-testid="stHeader"] {
-        background-color: #FFB6D9 !important;
-    }
-    
-    [data-testid="stSidebar"] {
-        background-color: #FFE4F0 !important;
-    }
-    
     .main {
-        background-color: #FFF5F9 !important;
+        background: linear-gradient(135deg, #FFF5F9 0%, #FFE4F0 100%);
     }
-    
-    h1, h2, h3 {
-        color: #C2185B !important;
-        font-weight: 700;
-    }
-    
     .stButton > button {
-        background-color: #FFB6D9 !important;
-        color: white !important;
-        border: none !important;
-        border-radius: 25px !important;
-        padding: 10px 30px !important;
-        font-weight: 600 !important;
-        transition: all 0.3s ease !important;
+        background-color: #FFB6D9;
+        color: white;
+        border-radius: 10px;
+        border: none;
+        padding: 10px 20px;
+        font-weight: bold;
     }
-    
     .stButton > button:hover {
-        background-color: #FF69B4 !important;
-        transform: scale(1.05) !important;
+        background-color: #FF9DC5;
     }
-    
+    h1, h2, h3 {
+        color: #D4526E;
+        font-weight: bold;
+    }
     .result-box {
-        background: linear-gradient(135deg, #FFB6D9 0%, #FFC0CB 100%) !important;
-        padding: 30px !important;
-        border-radius: 20px !important;
-        box-shadow: 0 4px 15px rgba(255, 105, 180, 0.2) !important;
-        margin: 20px 0 !important;
-    }
-    
-    .destination-card {
-        background-color: white !important;
-        border-left: 5px solid #FFB6D9 !important;
-        padding: 20px !important;
-        border-radius: 10px !important;
-        margin: 15px 0 !important;
-        box-shadow: 0 2px 10px rgba(255, 182, 217, 0.1) !important;
-    }
-    
-    .stSelectbox, .stRadio {
-        background-color: white !important;
-    }
-    
-    .stTabs [data-baseweb="tab-list"] button {
-        background-color: #FFE4F0 !important;
-        color: #C2185B !important;
-    }
-    
-    .stTabs [aria-selected="true"] {
-        background-color: #FFB6D9 !important;
-        color: white !important;
+        background-color: #FFEEF7;
+        border: 2px solid #FFB6D9;
+        border-radius: 15px;
+        padding: 20px;
+        margin: 10px 0;
     }
     </style>
-""", unsafe_allow_html=True)
+    """, unsafe_allow_html=True)
 
-# 데이터 정의
-MBTI_DESTINATIONS = {
-    "ENFP": {
-        "name": "자유로운 모험가",
-        "destinations": [
-            {
-                "place": "🌃 도쿄 (도심 탐방)",
-                "description": "에너지 넘치는 활기찬 분위기의 시부야, 신주쿠, 하라주쿠 거리 탐방",
-                "attractions": ["팀버튼 카페", "메이드 카페", "로봇 레스토랑", "오다이바"],
-                "duration": "3-4일",
-                "budget": "중상"
-            },
-            {
-                "place": "🎪 오사카 (자유로운 분위기)",
-                "description": "도톤보리의 활기찬 야시장과 문화 공간",
-                "attractions": ["도톤보리", "오사카성", "흥겐지 사원", "유니버셜 스튜디오"],
-                "duration": "2-3일",
-                "budget": "중상"
-            },
-            {
-                "place": "🏯 교토 (역사와 현대의 조화)",
-                "description": "전통과 현대가 만나는 신사 탐방 및 체험 활동",
-                "attractions": ["마치야 카페", "게이샤 공연", "기온 지구", "대나무숲"],
-                "duration": "2-3일",
-                "budget": "중상"
-            }
-        ]
+# 여행지 데이터
+travel_data = {
+    "ISTJ": {
+        "name": "현실적인 계획가",
+        "location": "도쿄 & 교토",
+        "description": "효율적이고 체계적인 여행을 즐기는 당신을 위한 추천입니다.",
+        "spots": ["도쿄 국립박물관", "교토 기온", "아라시야마 대나무숲"],
+        "budget": "2,500,000원",
+        "duration": "7일"
     },
-    "ENFJ": {
-        "name": "따뜻한 리더",
-        "destinations": [
-            {
-                "place": "❤️ 교토 (전통 문화)",
-                "description": "사람들과 연결되는 문화체험과 전통 공예 활동",
-                "attractions": ["게이샤 공연", "다도 체험", "기모노 입기", "사찰 투숙"],
-                "duration": "3-4일",
-                "budget": "중상"
-            },
-            {
-                "place": "🏮 오사카 (사람과의 만남)",
-                "description": "현지인과의 만남과 공동체 분위기의 장소들",
-                "attractions": ["로컬 야시장", "온천마을", "오사카 축제", "호텔 브레이크패스트"],
-                "duration": "2-3일",
-                "budget": "중상"
-            },
-            {
-                "place": "🌸 아라시야마 (예술과 영감)",
-                "description": "예술가적 영감을 주는 자연과 전시관",
-                "attractions": ["대나무숲", "메종 드 프뢰유르", "미술관", "예술 카페"],
-                "duration": "1-2일",
-                "budget": "중상"
-            }
-        ]
-    },
-    "INFP": {
-        "name": "몽상가 예술가",
-        "destinations": [
-            {
-                "place": "🌸 아라시야마 (영감의 공간)",
-                "description": "조용하고 영감을 주는 자연 속의 예술 공간",
-                "attractions": ["대나무숲", "료안지 정원", "미술관", "예술 카페"],
-                "duration": "2-3일",
-                "budget": "중하"
-            },
-            {
-                "place": "🏯 쿠릴시마 (섬의 고요함)",
-                "description": "독립적인 예술가들의 섬에서의 조용한 시간",
-                "attractions": ["미술관", "아티스트 스튜디오", "해변 산책", "갤러리"],
-                "duration": "2-3일",
-                "budget": "중하"
-            },
-            {
-                "place": "📚 가나자와 (문화 도시)",
-                "description": "조용하고 감성적인 전통 도시",
-                "attractions": ["미술관", "정원", "게이샤 구역", "전통공예 체험"],
-                "duration": "2일",
-                "budget": "중하"
-            }
-        ]
+    "ISFJ": {
+        "name": "따뜻한 관찰자",
+        "location": "오사카 & 나라",
+        "description": "사람의 온기가 담긴 전통적인 경험을 추천합니다.",
+        "spots": ["오사카 성", "나라 공원", "톤다바야시 마을"],
+        "budget": "2,000,000원",
+        "duration": "5일"
     },
     "INFJ": {
-        "name": "통찰하는 현자",
-        "destinations": [
-            {
-                "place": "🏛️ 교토 (영적 통찰)",
-                "description": "깊은 명상과 영적 체험을 할 수 있는 사찰들",
-                "attractions": ["금각사", "은각사", "사찰 명상", "선학원"],
-                "duration": "3-4일",
-                "budget": "중상"
-            },
-            {
-                "place": "🏔️ 후지산 지역 (자연과 명상)",
-                "description": "조용한 자연 속에서의 영적 재충전",
-                "attractions": ["후지산 등반", "호수 산책", "온천", "숲 명상"],
-                "duration": "3일",
-                "budget": "중상"
-            },
-            {
-                "place": "🌿 다카야마 (산촌 체험)",
-                "description": "전통 마을에서의 느린 여행",
-                "attractions": ["전통 마을", "사찰 숙박", "자연 산책", "공예 체험"],
-                "duration": "2-3일",
-                "budget": "중하"
-            }
-        ]
+        "name": "신비로운 선지자",
+        "location": "교토 & 시라카와고",
+        "description": "정신적인 깊이와 아름다움을 느낄 수 있는 여행지입니다.",
+        "spots": ["키요미즈데라", "시라카와고 마을", "철학의 길"],
+        "budget": "2,800,000원",
+        "duration": "6일"
     },
-    "ENTJ": {
-        "name": "전략적 지휘관",
-        "destinations": [
-            {
-                "place": "💼 도쿄 (비즈니스 지구)",
-                "description": "일본의 경제 중심지와 최신 기술 체험",
-                "attractions": ["도쿄 증권거래소", "가제호시 신사", "기술박물관", "고급 레스토랑"],
-                "duration": "3-4일",
-                "budget": "상"
-            },
-            {
-                "place": "🏢 오사카 (비즈니스 네트워킹)",
-                "description": "역사적 의미의 오사카성과 현대 도시",
-                "attractions": ["오사카성", "비즈니스 디스트릭트", "기술 박물관", "도시 관광"],
-                "duration": "2-3일",
-                "budget": "중상"
-            },
-            {
-                "place": "🎯 쿄토 (역사 속의 전략)",
-                "description": "역사적인 정치/군사 유적지 탐방",
-                "attractions": ["황궁", "도요토미 유산", "닌자 박물관", "사무라이 문화"],
-                "duration": "2-3일",
-                "budget": "중상"
-            }
-        ]
+    "INTJ": {
+        "name": "독립적인 전략가",
+        "location": "도쿄 & 오키나와",
+        "description": "독특한 관점으로 여행을 즐기는 당신을 위한 특별한 경험입니다.",
+        "spots": ["팀버튼 미술관", "오키나와 해양박물관", "신주쿠 야경"],
+        "budget": "3,000,000원",
+        "duration": "8일"
     },
-    "ESTJ": {
-        "name": "신뢰할 수 있는 관리자",
-        "destinations": [
-            {
-                "place": "🗻 도쿄-오사카 황금코스",
-                "description": "효율적으로 계획된 일본의 주요 관광지",
-                "attractions": ["동경역", "오사카성", "교토 사찰", "엔닌자키"],
-                "duration": "5-7일",
-                "budget": "중상"
-            },
-            {
-                "place": "🚄 신칸센 투어 (기차 여행)",
-                "description": "일본의 체계적이고 안정적인 교통망 이용",
-                "attractions": ["신칸센 경험", "각 도시 주요 관광지", "전통 관광", "료칸 숙박"],
-                "duration": "4-5일",
-                "budget": "중상"
-            },
-            {
-                "place": "🎌 나라-오사카 역사 투어",
-                "description": "일본 역사의 중요 유적지 체계적 탐방",
-                "attractions": ["나라 대불", "도다이지", "오사카성", "역사박물관"],
-                "duration": "2-3일",
-                "budget": "중하"
-            }
-        ]
-    },
-    "ESFP": {
-        "name": "생기 넘치는 연예인",
-        "destinations": [
-            {
-                "place": "🎉 도쿄 (재미와 엔터테인먼트)",
-                "description": "신나는 도시의 모든 재미를 즐기기",
-                "attractions": ["가라오케", "클럽", "테마파크", "레이저 태그"],
-                "duration": "3-4일",
-                "budget": "상"
-            },
-            {
-                "place": "🎪 오사카 (축제와 파티)",
-                "description": "활기찬 야시장과 24시간 도시 활동",
-                "attractions": ["도톤보리 나이트라이프", "축제", "클럽", "영화관"],
-                "duration": "2-3일",
-                "budget": "상"
-            },
-            {
-                "place": "🏖️ 오키나와 (휴양지)",
-                "description": "해변에서의 물놀이와 워터스포츠",
-                "attractions": ["해변", "스노쿨링", "워터파크", "해변 바"],
-                "duration": "3-4일",
-                "budget": "중상"
-            }
-        ]
-    },
-    "ESFJ": {
-        "name": "따뜻한 친구",
-        "destinations": [
-            {
-                "place": "🌸 교토 (문화 공유)",
-                "description": "사람들과 함께하는 전통 문화 체험",
-                "attractions": ["게이샤 관광", "마츠리 축제", "온천마을", "전통 음식"],
-                "duration": "3-4일",
-                "budget": "중상"
-            },
-            {
-                "place": "👥 오사카 (사람과의 만남)",
-                "description": "따뜻한 현지인들과의 상호작용",
-                "attractions": ["로컬 식당", "야시장", "축제", "커뮤니티 활동"],
-                "duration": "2-3일",
-                "budget": "중상"
-            },
-            {
-                "place": "🎌 히로시마 (의미 있는 여행)",
-                "description": "역사적 의미 있는 장소와 평화의 메시지",
-                "attractions": ["평화기념공원", "히로시마성", "국제성", "추도섬"],
-                "duration": "1-2일",
-                "budget": "중하"
-            }
-        ]
+    "ISTP": {
+        "name": "논리적인 장인",
+        "location": "아키하바라 & 도쿄",
+        "description": "기술과 혁신을 체험할 수 있는 여행입니다.",
+        "spots": ["teamLab Borderless", "아키하바라 전자상가", "로봇 레스토랑"],
+        "budget": "2,200,000원",
+        "duration": "4일"
     },
     "ISFP": {
-        "name": "예민한 모험가",
-        "destinations": [
-            {
-                "place": "🎨 가나자와 (예술 도시)",
-                "description": "아름다운 정원과 예술 문화",
-                "attractions": ["21세기미술관", "켄로쿠엔 정원", "게이샤 구역", "식사"],
-                "duration": "2-3일",
-                "budget": "중하"
-            },
-            {
-                "place": "🌲 아라시야마 (자연 속 예술)",
-                "description": "아름다운 자연경관과 예술 공간",
-                "attractions":
+        "name": "예술적인 모험가",
+        "location": "도쿄 & 가나자와",
+        "description": "미적 감각과 자유로운 경험을 선사합니다.",
+        "spots": ["21세기 미술관", "하이쿠 박물관", "오모테산도 거리"],
+        "budget": "2,400,000원",
+        "duration": "6일"
+    },
+    "INFP": {
+        "name": "이상주의자 중재자",
+        "location": "교토 & 다카야마",
+        "description": "감정과 영감이 넘치는 낭만적인 여행입니다.",
+        "spots": ["마지막 사무라이 촬영지", "향림사", "오사카 야경"],
+        "budget": "2,600,000원",
+        "duration": "7일"
+    },
+    "INTP": {
+        "name": "지식을 탐구하는 철학자",
+        "location": "도쿄 & 교토",
+        "description": "역사와 문화의 깊이를 탐구하는 여행입니다.",
+        "spots": ["도쿄 대학 캠퍼스", "교토 철학의 길", "일본 근현대 미술관"],
+        "budget": "2,300,000원",
+        "duration": "6일"
+    },
+    "ESTP": {
+        "name": "모험을 즐기는 사업가",
+        "location": "후쿠오카 & 나고야",
+        "description": "짜릿한 경험과 즉흥적인 모험으로 가득합니다.",
+        "spots": ["야타이 음식거리", "스카이 번지점프", "토요타 박물관"],
+        "budget": "2,100,000원",
+        "duration": "4일"
+    },
+    "ESFP": {
+        "name": "즐거움의 연예인",
+        "location": "도쿄 & 오사카",
+        "description": "재미있고 활기찬 경험들로 가득한 여행입니다.",
+        "spots": ["도쿄 디즈니랜드", "오사카 도톤보리", "일본 축제"],
+        "budget": "2,700,000원",
+        "duration": "5일"
+    },
+    "ENFP": {
+        "name": "열정적인 캠페이너",
+        "location": "도쿄 & 오사카 & 교토",
+        "description": "새로운 만남과 경험이 가득한 여행입니다.",
+        "spots": ["하라주쿠", "도톤보리", "철학의 길"],
+        "budget": "3,000,000원",
+        "duration": "7일"
+    },
+    "ENTP": {
+        "name": "진취적인 변론가",
+        "location": "도쿄 & 오키나와",
+        "description": "논의와 발견으로 가득한 지적 모험입니다.",
+        "spots": ["teamLab", "오키나와 문화 박물관", "신쥬쿠 야경"],
+        "budget": "2,900,000원",
+        "duration": "7일"
+    },
+    "ESTJ": {
+        "name": "엄격한 관리자",
+        "location": "도쿄 & 오사카",
+        "description": "효율적이고 체계적인 일정으로 도시를 정복합니다.",
+        "spots": ["도쿄 역", "오사카 성", "신칸센 체험"],
+        "budget": "2,000,000원",
+        "duration": "5일"
+    },
+    "ESFJ": {
+        "name": "사교적인 영사",
+        "location": "교토 & 오사카",
+        "description": "따뜻한 인정과 함께하는 여행입니다.",
+        "spots": ["기요미즈데라", "도톤보리 음식투어", "마지코 거리"],
+        "budget": "2,200,000원",
+        "duration": "5일"
+    },
+    "ENFJ": {
+        "name": "카리스마 있는 리더",
+        "location": "도쿄 & 교토 & 오사카",
+        "description": "영감과 감동이 넘치는 여행을 주도합니다.",
+        "spots": ["센소지 사원", "히라유 온천", "교토 야경"],
+        "budget": "2,800,000원",
+        "duration": "7일"
+    },
+    "ENTJ": {
+        "name": "전략적인 사령관",
+        "location": "도쿄 & 싱가포르",
+        "description": "비전과 전략으로 여행을 완벽하게 계획합니다.",
+        "spots": ["도쿄 메트로폴리탄", "오다이바", "로봇 레스토랑"],
+        "budget": "3,200,000원",
+        "duration": "8일"
+    }
+}
+
+# 페이지 네비게이션
+with st.sidebar:
+    selected = option_menu(
+        "📍 일본 여행 추천",
+        ["🏠 홈", "🧪 MBTI 진단", "🗺️ 추천지", "💬 문의"],
+        icons=["house", "clipboard", "map", "chat"],
+        menu_icon="cast",
+        default_index=0,
+        styles={
+            "container": {"padding": "0!important", "background-color": "#FFE4F0"},
+            "icon": {"color": "#FFB6D9", "font-size": "20px"},
+            "nav-link": {"font-size": "16px", "text-align": "left", "margin": "10px"},
+            "nav-link-selected": {"background-color": "#FFB6D9"},
+        }
+    )
+
+# 페이지 1: 홈
+if selected == "🏠 홈":
+    st.markdown("<h1 style='text-align: center;'>🌸 MBTI로 찾는 일본 여행지 🌸</h1>", unsafe_allow_html=True)
+    
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.image("https://images.unsplash.com/photo-1540959375944-7049f642e9c5?w=400", use_column_width=True)
+    with col2:
+        st.image("https://images.unsplash.com/photo-1522383750931-11fce5dbc3f6?w=400", use_column_width=True)
+    with col3:
+        st.image("https://images.unsplash.com/photo-1493246507139-91e8fad9978e?w=400", use_column_width=True)
+    
+    st.markdown("""
+    <div class='result-box'>
+    <h3>🎌 당신의 성격 유형에 맞는 일본 여행지를 추천해드립니다!</h3>
+    
+    **MBTI 진단**을 통해 당신의 성격 유형을 파악하고,
+    그에 맞는 일본의 숨은 보석 같은 여행지들을 만나보세요.
+    
+    - 🗺️ 개인 맞춤형 여행지 추천
+    - 💰 예산 정보 및 일정 제안
+    - 🎯 성격에 맞는 관광지 정보
+    </div>
+    """, unsafe_allow_html=True)
+
+# 페이지 2: MBTI 진단
+elif selected == "🧪 MBTI 진단":
+    st.markdown("<h2>당신의 MBTI를 선택하세요</h2>", unsafe_allow_html=True)
+    
+    mbti_type = st.selectbox(
+        "MBTI 선택:",
+        ["ISTJ", "ISFJ", "INFJ", "INTJ", "ISTP", "ISFP", "INFP", "INTP",
+         "ESTP", "ESFP", "ENFP", "ENTP", "ESTJ", "ESFJ", "ENFJ", "ENTJ"]
+    )
+    
+    if st.button("추천 받기 🎁", use_container_width=True):
+        st.session_state.selected_mbti = mbti_type
+        st.switch_page("pages/recommendation.py") if False else None
+        st.success(f"✅ {mbti_type} 타입의 추천을 보여드립니다!")
+        
+        info = travel_data[mbti_type]
+        
+        st.markdown(f"""
+        <div class='result-box'>
+        <h3>{info['name']}</h3>
+        <p><strong>추천 여행지:</strong> {info['location']}</p>
+        <p><strong>설명:</strong> {info['description']}</p>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        st.markdown("### 🏮 추천 관광지")
+        for spot in info['spots']:
+            st.markdown(f"✨ {spot}")
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            st.metric("💰 예상 예산", info['budget'])
+        with col2:
+            st.metric("📅 추천 일정", info['duration'])
+
+# 페이지 3: 추천지
+elif selected == "🗺️ 추천지":
+    st.markdown("<h2>MBTI별 여행지 가이드</h2>", unsafe_allow_html=True)
+    
+    tabs = st.tabs(["E", "I"])
+    
+    with tabs[0]:
+        st.subheader("외향형 (Extrovert)")
+        col
