@@ -1,13 +1,11 @@
 import streamlit as st
 from streamlit_option_menu import option_menu
-from datetime import datetime
 
 # 페이지 설정
 st.set_page_config(
     page_title="MBTI 일본 여행지 추천",
     page_icon="🌸",
-    layout="wide",
-    initial_sidebar_state="expanded"
+    layout="wide"
 )
 
 # CSS 스타일
@@ -23,9 +21,6 @@ st.markdown("""
         border: none;
         padding: 10px 20px;
         font-weight: bold;
-    }
-    .stButton > button:hover {
-        background-color: #FF9DC5;
     }
     h1, h2, h3 {
         color: #D4526E;
@@ -71,7 +66,7 @@ travel_data = {
         "name": "독립적인 전략가",
         "location": "도쿄 & 오키나와",
         "description": "독특한 관점으로 여행을 즐기는 당신을 위한 특별한 경험입니다.",
-        "spots": ["팀버튼 미술관", "오키나와 해양박물관", "신주쿠 야경"],
+        "spots": ["teamLab Borderless", "오키나와 해양박물관", "신주쿠 야경"],
         "budget": "3,000,000원",
         "duration": "8일"
     },
@@ -165,7 +160,7 @@ travel_data = {
     },
     "ENTJ": {
         "name": "전략적인 사령관",
-        "location": "도쿄 & 싱가포르",
+        "location": "도쿄 & 오키나와",
         "description": "비전과 전략으로 여행을 완벽하게 계획합니다.",
         "spots": ["도쿄 메트로폴리탄", "오다이바", "로봇 레스토랑"],
         "budget": "3,200,000원",
@@ -177,8 +172,8 @@ travel_data = {
 with st.sidebar:
     selected = option_menu(
         "📍 일본 여행 추천",
-        ["🏠 홈", "🧪 MBTI 진단", "🗺️ 추천지", "💬 문의"],
-        icons=["house", "clipboard", "map", "chat"],
+        ["🏠 홈", "🧪 MBTI 진단"],
+        icons=["house", "clipboard"],
         menu_icon="cast",
         default_index=0,
         styles={
@@ -192,14 +187,6 @@ with st.sidebar:
 # 페이지 1: 홈
 if selected == "🏠 홈":
     st.markdown("<h1 style='text-align: center;'>🌸 MBTI로 찾는 일본 여행지 🌸</h1>", unsafe_allow_html=True)
-    
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        st.image("https://images.unsplash.com/photo-1540959375944-7049f642e9c5?w=400", use_column_width=True)
-    with col2:
-        st.image("https://images.unsplash.com/photo-1522383750931-11fce5dbc3f6?w=400", use_column_width=True)
-    with col3:
-        st.image("https://images.unsplash.com/photo-1493246507139-91e8fad9978e?w=400", use_column_width=True)
     
     st.markdown("""
     <div class='result-box'>
@@ -225,11 +212,9 @@ elif selected == "🧪 MBTI 진단":
     )
     
     if st.button("추천 받기 🎁", use_container_width=True):
-        st.session_state.selected_mbti = mbti_type
-        st.switch_page("pages/recommendation.py") if False else None
-        st.success(f"✅ {mbti_type} 타입의 추천을 보여드립니다!")
-        
         info = travel_data[mbti_type]
+        
+        st.success(f"✅ {mbti_type} 타입의 추천을 보여드립니다!")
         
         st.markdown(f"""
         <div class='result-box'>
@@ -248,13 +233,3 @@ elif selected == "🧪 MBTI 진단":
             st.metric("💰 예상 예산", info['budget'])
         with col2:
             st.metric("📅 추천 일정", info['duration'])
-
-# 페이지 3: 추천지
-elif selected == "🗺️ 추천지":
-    st.markdown("<h2>MBTI별 여행지 가이드</h2>", unsafe_allow_html=True)
-    
-    tabs = st.tabs(["E", "I"])
-    
-    with tabs[0]:
-        st.subheader("외향형 (Extrovert)")
-        col
