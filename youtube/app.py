@@ -1,12 +1,9 @@
 import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
-import seaborn as sns
 from wordcloud import WordCloud
-import plotly.graph_objects as go
 import plotly.express as px
 from googleapiclient.discovery import build
-from datetime import datetime
 import re
 from collections import Counter
 import warnings
@@ -126,17 +123,20 @@ def get_video_info(api_key, video_id):
         
         if response['items']:
             video = response['items'][0]
+            thumb_url = video['snippet']['thumbnails'].get('maxres', {}).get('url')
+            if not thumb_url:
+                thumb_url = video['snippet']['thumbnails']['high']['url']
+            
             return {
                 'title': video['snippet']['title'],
                 'channel': video['snippet']['channelTitle'],
-                'thumbnail': video['snippet']['thumbnails']['maxres']['url'] if 'maxres' in video['snippet']['thumbnails'] else video['snippet']['thumbnails']['high']['url'],
+                'thumbnail': thumb_url,
                 'views': int(video['statistics']['viewCount']),
                 'likes': int(video['statistics'].get('likeCount', 0)),
                 'comment_count': int(video['statistics'].get('commentCount', 0))
             }
     except:
-        pass
-    return None
+        return None
 
 def plot_comments_timeline(df):
     """시간대별 댓글 추이"""
@@ -154,7 +154,8 @@ def plot_comments_timeline(df):
         labels={'date': '날짜', 'count': '댓글 수'},
         markers=True
     )
-    fig.update_traces(line=dict(color='#FF0000', width=2))
+    fig.update_traces(line=dict(color='#FF0000', width=3))
+    fig.update_layout(hovermode='x unified')
     return fig
 
 def plot_likes_distribution(df):
@@ -167,42 +168,37 @@ def plot_likes_distribution(df):
         labels={'likes': '좋아요 수', 'count': '댓글 수'},
         color_discrete_sequence=['#FF0000']
     )
+    fig.update_layout(hovermode='x unified')
     return fig
 
-def extract_nouns(text):
-    """간단한 한글 명사 추출 (정규표현식 기반)"""
-    # 한글 단어 추출
+def extract_korean_words(text):
+    """한글 단어 추출"""
     korean_words = re.findall(r'[가-힣]+', text)
-    # 2글자 이상만 필터링
     return [word for word in korean_words if len(word) >= 2]
 
 def create_wordcloud(df):
     """한글 워드클라우드 생성"""
     try:
-        # 텍스트에서 한글 명사 추출
-        all_nouns = []
+        all_words = []
         for text in df['text']:
-            nouns = extract_nouns(text)
-            all_nouns.extend(nouns)
+            words = extract_korean_words(text)
+            all_words.extend(words)
         
-        if not all_nouns:
+        if not all_words:
             return None
         
-        # 단어 빈도 계산
-        noun_freq = Counter(all_nouns)
+        word_freq = Counter(all_words)
+        top_words = dict(word_freq.most_common(100))
         
-        # 가장 많은 단어들만 사용
-        noun_freq = dict(noun_freq.most_common(100))
-        
-        # 워드클라우드 생성
         wc = WordCloud(
             font_path='/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc',
             background_color='white',
             width=1000,
             height=500,
             relative_scaling=0.5,
-            min_font_size=10
-        ).generate_from_frequencies(noun_freq)
+            min_font_size=10,
+            collocations=False
+        ).generate_from_frequencies(top_words)
         
         fig, ax = plt.subplots(figsize=(14, 7))
         ax.imshow(wc, interpolation='bilinear')
@@ -210,11 +206,11 @@ def create_wordcloud(df):
         plt.tight_layout(pad=0)
         return fig
     except Exception as e:
-        st.warning(f"워드클라우드 생성 실패: {str(e)}")
+        st.warning(f"워드클라우드 생성 실패")
         return None
 
 def plot_reply_count(df):
-    """댓글 답글 수 분포"""
+    """답글 수 분포"""
     df_copy = df.copy()
     df_top = df_copy.nlargest(15, 'reply_count')
     
@@ -228,14 +224,14 @@ def plot_reply_count(df):
         color='reply_count',
         color_continuous_scale='Reds'
     )
-    fig.update_layout(height=500)
+    fig.update_layout(height=500, hovermode='y unified')
     return fig
 
 # ===================== 메인 로직 =====================
 
 if not api_key:
     st.warning("⚠️ 사이드바에서 API 키를 입력하세요.")
-    st.markdown("""
+    st.info("""
     ### 📌 API 키 발급 방법
     1. [Google Cloud Console](https://console.cloud.google.com) 접속
     2. 새 프로젝트 생성
@@ -245,7 +241,7 @@ if not api_key:
     """)
 
 elif not youtube_url:
-    st.info("💡 유튜브 영상 링크를 입력하세요.")
+    st.info("💡 사이드바에서 유튜브 영상 링크를 입력하세요.")
 
 else:
     video_id = extract_video_id(youtube_url)
@@ -253,12 +249,10 @@ else:
     if not video_id:
         st.error("❌ 유효한 유튜브 링크가 아닙니다.")
     else:
-        # 영상 정보 조회
         with st.spinner("영상 정보 로드 중..."):
             video_info = get_video_info(api_key, video_id)
         
         if video_info:
-            # 영상 정보 표시
             col1, col2 = st.columns([1, 2])
             
             with col1:
@@ -278,15 +272,13 @@ else:
         
         st.divider()
         
-        # 댓글 수집
-        if st.button("🔍 댓글 분석 시작", use_container_width=True, key="analyze_btn"):
+        if st.button("🔍 댓글 분석 시작", use_container_width=True):
             with st.spinner(f"댓글 {num_comments}개 수집 중..."):
                 df = get_youtube_comments(api_key, video_id, num_comments)
             
             if df is not None and len(df) > 0:
                 st.success(f"✅ {len(df)}개의 댓글 수집 완료!")
                 
-                # 탭 생성
                 tab1, tab2, tab3, tab4, tab5 = st.tabs([
                     "📊 개요",
                     "📈 타임라인",
@@ -304,7 +296,7 @@ else:
                     with col2:
                         st.metric("평균 좋아요", f"{df['likes'].mean():.1f}")
                     with col3:
-                        st.metric("최대 좋아요", df['likes'].max())
+                        st.metric("최대 좋아요", f"{df['likes'].max():,}")
                     with col4:
                         st.metric("평균 답글 수", f"{df['reply_count'].mean():.1f}")
                     
@@ -335,11 +327,10 @@ else:
                     df_top = df.nlargest(20, 'likes')[['author', 'text', 'likes', 'reply_count']]
                     
                     for idx, row in df_top.iterrows():
-                        with st.container():
-                            st.markdown(f"**{row['author']}**")
-                            st.write(row['text'])
-                            st.caption(f"👍 {row['likes']} | 💬 {row['reply_count']}")
-                            st.divider()
+                        st.markdown(f"**{row['author']}**")
+                        st.write(row['text'])
+                        st.caption(f"👍 {row['likes']} | 💬 {row['reply_count']}")
+                        st.divider()
             
             else:
-                st.error("❌ 댓글을 수집할 수 없습니다. API 키와 영상 ID를 확인하세요.")
+                st.error("❌ 댓글을 수집할 수 없습니다.")
